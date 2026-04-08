@@ -1,2 +1,2 @@
-# user-management
-A python package for user management
+# backend-boilerplate
+A python package for backend
