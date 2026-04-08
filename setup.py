@@ -20,6 +20,6 @@ setup(
         'Django',
         'djangorestframework',
         'urllib3'
-
+        'django-filter'
     ],
 )
