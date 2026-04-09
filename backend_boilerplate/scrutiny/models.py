@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import models
-from backend_boilerplate.configurables.models import NotificationSettings
+from backend_boilerplate.configurables.models import AbstractNotificationSettings
 from backend_boilerplate.utils.constants import WORKFLOW_ACTION_TYPE_BACKWARD, WORKFLOW_ACTION_TYPE_CHOICES, WORKFLOW_ACTION_TYPE_FORWARD
 from backend_boilerplate.utils.managers import ActiveManager
 from backend_boilerplate.utils.models import BaseModel
@@ -123,7 +123,7 @@ class LevelActionNotificationTemplate(models.Model):
         related_name="notification_templates",
     )
     notification_template = models.ForeignKey(
-        NotificationSettings,
+        AbstractNotificationSettings,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
