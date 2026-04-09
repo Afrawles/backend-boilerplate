@@ -37,6 +37,7 @@ DOCUMENT_TYPES = (
     (DOCUMENT_TYPE_OTHER, "Other"),
 )
 
+CAN_SPECIAL_EDIT = ("can_special_edit", "Can edit special fields")
 NOTIFICATION_CHANNEL_EMAIL = "email"
 NOTIFICATION_CHANNEL_SMS = "sms"
 NOTIFICATION_CHANNEL_SYSTEM_PUSH = "system_push"
