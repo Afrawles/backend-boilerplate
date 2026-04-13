@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from backend_boilerplate.scrutiny.models import AbstractLevelActionNotificationTemplate, AbstractScrutinyWorkflowConfigurable, AbstractWorkFlow, AbstractWorkflowAction
+from backend_boilerplate.scrutiny.models import AbstractLevelActionNotificationTemplate
 from backend_boilerplate.user_mgmt.serializers import SimplestUserSerializer
 from backend_boilerplate.utils.serializers import ActivityModelSerializer, CreateOnlyCurrentUserDefault, NestedModelSerializer
 

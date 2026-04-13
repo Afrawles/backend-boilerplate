@@ -6,7 +6,12 @@ from django.db import transaction
 
 from backend_boilerplate.notifications.tasks.emails import send_email
 from backend_boilerplate.notifications.template_renderer import TemplateRenderer
-from backend_boilerplate.scrutiny.models import LevelActionNotificationTemplate, ScrutinyWorkflowConfigurable, WorkFlow, WorkflowAction
+from backend_boilerplate.scrutiny.models import (
+    AbstractLevelActionNotificationTemplate,
+    AbstractScrutinyWorkflowConfigurable,
+    AbstractWorkFlow,
+    AbstractWorkflowAction,
+)
 from backend_boilerplate.utils.constants import WORKFLOW_ACTION_TYPE_APPROVE, WORKFLOW_ACTION_TYPE_BACKWARD, WORKFLOW_ACTION_TYPE_FORWARD, WORKFLOW_ACTION_TYPE_REJECT
 
 
@@ -59,7 +64,7 @@ class ScrutinyWorkflowEngine:
         self._route()
 
     def _resolve_context(self):
-        self._workflow = WorkFlow.objects.filter(
+        self._workflow = AbstractWorkFlow.objects.filter(
             name=self.workflow_name, is_active=True
         ).first()
 
@@ -72,7 +77,7 @@ class ScrutinyWorkflowEngine:
         self._owner = getattr(self.instance, "created_by", None) or self.created_by
 
         self._level_config = (
-            ScrutinyWorkflowConfigurable.objects.prefetch_related(
+            AbstractScrutinyWorkflowConfigurable.objects.prefetch_related(
                 "actors", "allowed_actions"
             )
             .filter(
@@ -94,7 +99,7 @@ class ScrutinyWorkflowEngine:
             )
 
     def _resolve_action(self):
-        self._action_obj = WorkflowAction.objects.filter(
+        self._action_obj = AbstractWorkflowAction.objects.filter(
             name=self.action_name, is_active=True
         ).first()
 
@@ -319,22 +324,28 @@ class ScrutinyWorkflowEngine:
                 recipient=self._owner
             )
 
-    def _get_notification_template(self) -> LevelActionNotificationTemplate | None:
+    def _get_notification_template(
+        self,
+    ) -> AbstractLevelActionNotificationTemplate | None:
         """
         Look up the configured notification template for the current action
         at the current level.
         """
         next_level = self._current_level + 1
-        level_config = ScrutinyWorkflowConfigurable.objects.prefetch_related(
+        level_config = (
+            AbstractScrutinyWorkflowConfigurable.objects.prefetch_related(
                 "actors", "allowed_actions"
-            ).filter(
+            )
+            .filter(
                 workflow=self._workflow,
                 scrutiny_level=next_level,
                 is_active=True,
-            ).first()
+            )
+            .first()
+        )
 
         return (
-            LevelActionNotificationTemplate.objects.filter(
+            AbstractLevelActionNotificationTemplate.objects.filter(
                 level_config=level_config,
                 action=self._action_obj,
             )
@@ -384,7 +395,7 @@ class ScrutinyWorkflowEngine:
 
     def _get_level_config(self, level: int):
         return (
-            ScrutinyWorkflowConfigurable.objects.prefetch_related("actors")
+            AbstractScrutinyWorkflowConfigurable.objects.prefetch_related("actors")
             .filter(
                 workflow=self._workflow,
                 scrutiny_level=level,

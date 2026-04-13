@@ -31,7 +31,9 @@ class AbstractWorkFlow(WorkflowAbstractModel):
     @property
     def number_of_levels(self):
         return (
-            ScrutinyWorkflowConfigurable.objects.filter(workflow=self, is_active=True)
+            AbstractScrutinyWorkflowConfigurable.objects.filter(
+                workflow=self, is_active=True
+            )
             .values_list("scrutiny_level", flat=True)
             .distinct()
             .count()
