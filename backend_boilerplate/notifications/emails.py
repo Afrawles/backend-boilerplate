@@ -18,10 +18,32 @@ def handle_email(
     attachment_file=[],
     from_template=False,
     html_message=None,
+    local_development=False,
 ):
     """
     constructs an email message and handles actual sending
     """
+    if local_development:
+        from django.core.mail import EmailMultiAlternatives
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body="notification",
+            from_email=sender_email,
+            to=to_emails,
+        )
+
+        email.attach_alternative(render_to_string(template_name, context), "text/html")
+
+        if len(attachment_file) > 0:
+            for attachment in attachment_file or []:
+                if attachment:
+                    file_name, file_content, content_type = attachment
+                    email.attach(file_name, file_content, content_type)
+
+        email.send(fail_silently=False)
+
+        return []
+
     if from_template:
         return handle_email_templates(
             subject=subject,
