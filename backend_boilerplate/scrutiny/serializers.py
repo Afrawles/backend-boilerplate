@@ -1,6 +1,5 @@
 from rest_framework import serializers
 
-from backend_boilerplate.scrutiny.models import AbstractLevelActionNotificationTemplate
 from backend_boilerplate.user_mgmt.serializers import SimplestUserSerializer
 from backend_boilerplate.utils.serializers import ActivityModelSerializer, CreateOnlyCurrentUserDefault, NestedModelSerializer
 
@@ -110,13 +109,16 @@ class ScrutinyWorkflowConfigurableSerializer(ActivityModelSerializer, NestedMode
         if data is None:
             return
 
+        # dynamically resolving the model
+        notification_model = self.fields["notification_templates"].child.Meta.model
+
         incoming_actions = {t["action"] for t in data if t.get("action")}
         instance.notification_templates.exclude(action__in=incoming_actions).delete()
 
         for template in data:
             template = dict(template)
             recipients = template.pop("notification_recipients", [])
-            obj, _ = AbstractLevelActionNotificationTemplate.objects.update_or_create(
+            obj, _ = notification_model.objects.update_or_create(
                 level_config=instance,
                 action=template["action"],
                 defaults=template,

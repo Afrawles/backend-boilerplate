@@ -6,13 +6,12 @@ from django.db import transaction
 
 from backend_boilerplate.notifications.tasks.emails import send_email
 from backend_boilerplate.notifications.template_renderer import TemplateRenderer
-from backend_boilerplate.scrutiny.models import (
-    AbstractLevelActionNotificationTemplate,
-    AbstractScrutinyWorkflowConfigurable,
-    AbstractWorkFlow,
-    AbstractWorkflowAction,
+from backend_boilerplate.utils.constants import (
+    WORKFLOW_ACTION_TYPE_APPROVE,
+    WORKFLOW_ACTION_TYPE_BACKWARD,
+    WORKFLOW_ACTION_TYPE_FORWARD,
+    WORKFLOW_ACTION_TYPE_REJECT,
 )
-from backend_boilerplate.utils.constants import WORKFLOW_ACTION_TYPE_APPROVE, WORKFLOW_ACTION_TYPE_BACKWARD, WORKFLOW_ACTION_TYPE_FORWARD, WORKFLOW_ACTION_TYPE_REJECT
 
 
 logger = logging.getLogger(__name__)
@@ -20,6 +19,11 @@ User = settings.AUTH_USER_MODEL
 
 
 class ScrutinyWorkflowEngine:
+    # Override these in subclasses with concrete models
+    workflow_model = None
+    workflow_action_model = None
+    workflow_config_model = None
+    notification_template_model = None
 
     def __init__(
         self,
@@ -64,7 +68,7 @@ class ScrutinyWorkflowEngine:
         self._route()
 
     def _resolve_context(self):
-        self._workflow = AbstractWorkFlow.objects.filter(
+        self._workflow = self.workflow_model.objects.filter(
             name=self.workflow_name, is_active=True
         ).first()
 
@@ -77,7 +81,7 @@ class ScrutinyWorkflowEngine:
         self._owner = getattr(self.instance, "created_by", None) or self.created_by
 
         self._level_config = (
-            AbstractScrutinyWorkflowConfigurable.objects.prefetch_related(
+            self.workflow_config_model.objects.prefetch_related(
                 "actors", "allowed_actions"
             )
             .filter(
@@ -99,7 +103,7 @@ class ScrutinyWorkflowEngine:
             )
 
     def _resolve_action(self):
-        self._action_obj = AbstractWorkflowAction.objects.filter(
+        self._action_obj = self.workflow_action_model.objects.filter(
             name=self.action_name, is_active=True
         ).first()
 
@@ -185,7 +189,6 @@ class ScrutinyWorkflowEngine:
 
         if hasattr(self.instance, "sent_back"):
             self.instance.sent_back = False
-
             self.instance.save(
                 update_fields=["status", "current_scrutiny_level", "sent_back"]
             )
@@ -211,7 +214,6 @@ class ScrutinyWorkflowEngine:
             )
             return
 
-        # Get who to notify for the next level and send emails
         notification = self._get_notification_template()
 
         if not notification:
@@ -221,15 +223,12 @@ class ScrutinyWorkflowEngine:
             notification.notify_actors
             or not notification.notification_recipients.exists()
         ):
-            # Fall back to actors if notify_actors is set OR no explicit recipients configured
             recipients = self._users_for_level(self._next_level_config)
         else:
             recipients = notification.notification_recipients.filter(is_active=True)
 
         for user in recipients:
-            self._send_email(
-                recipient=user
-            )
+            self._send_email(recipient=user)
 
     def _apply_send_back(self):
         target_level = self._action_obj.target_level
@@ -251,17 +250,13 @@ class ScrutinyWorkflowEngine:
             + (["sent_back"] if hasattr(self.instance, "sent_back") else [])
         )
 
-        self._send_email(
-            recipient=self._owner
-        )
+        self._send_email(recipient=self._owner)
 
         target_config = self._get_level_config(target_level)
         if target_config:
             for user in self._users_for_level(target_config):
                 if user != self._owner:
-                    self._send_email(
-                        recipient=user
-                    )
+                    self._send_email(recipient=user)
 
     def _apply_approved(self):
         next_level = self._current_level + 1
@@ -277,21 +272,12 @@ class ScrutinyWorkflowEngine:
         if notification and notification.notification_recipients.exists():
             recipients = notification.notification_recipients.filter(is_active=True)
             for user in recipients:
-                self._send_email(
-                    recipient=user
-                )
-            # Only send to owner separately if not already in recipients
+                self._send_email(recipient=user)
             if notification.notify_owner and self._owner:
                 if not recipients.filter(pk=self._owner.pk).exists():
-                    self._send_email(
-                        recipient=self._owner
-                    )
+                    self._send_email(recipient=self._owner)
         else:
-            # No explicit recipients — owner is the default, notify_owner is irrelevant here
-            self._send_email(
-                recipient=self._owner
-            )
-
+            self._send_email(recipient=self._owner)
 
     def _apply_rejected(self):
         self.instance.status = self.rejected_status or "rejected"
@@ -311,29 +297,17 @@ class ScrutinyWorkflowEngine:
         if notification and notification.notification_recipients.exists():
             recipients = notification.notification_recipients.filter(is_active=True)
             for user in recipients:
-                self._send_email(
-                    recipient=user
-                )
+                self._send_email(recipient=user)
             if notification.notify_owner and self._owner:
                 if not recipients.filter(pk=self._owner.pk).exists():
-                    self._send_email(
-                        recipient=self._owner
-                    )
+                    self._send_email(recipient=self._owner)
         else:
-            self._send_email(
-                recipient=self._owner
-            )
+            self._send_email(recipient=self._owner)
 
-    def _get_notification_template(
-        self,
-    ) -> AbstractLevelActionNotificationTemplate | None:
-        """
-        Look up the configured notification template for the current action
-        at the current level.
-        """
+    def _get_notification_template(self) -> None:
         next_level = self._current_level + 1
         level_config = (
-            AbstractScrutinyWorkflowConfigurable.objects.prefetch_related(
+            self.workflow_config_model.objects.prefetch_related(
                 "actors", "allowed_actions"
             )
             .filter(
@@ -345,7 +319,7 @@ class ScrutinyWorkflowEngine:
         )
 
         return (
-            AbstractLevelActionNotificationTemplate.objects.filter(
+            self.notification_template_model.objects.filter(
                 level_config=level_config,
                 action=self._action_obj,
             )
@@ -353,10 +327,7 @@ class ScrutinyWorkflowEngine:
             .first()
         )
 
-    def _send_email(
-        self,
-        recipient,
-    ):
+    def _send_email(self, recipient):
         if not recipient:
             return
 
@@ -395,7 +366,7 @@ class ScrutinyWorkflowEngine:
 
     def _get_level_config(self, level: int):
         return (
-            AbstractScrutinyWorkflowConfigurable.objects.prefetch_related("actors")
+            self.workflow_config_model.objects.prefetch_related("actors")
             .filter(
                 workflow=self._workflow,
                 scrutiny_level=level,
