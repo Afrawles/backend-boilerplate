@@ -98,11 +98,9 @@ class AbstractScrutinyWorkflowConfigurable(WorkflowAbstractModel):
     def __str__(self):
         return f"{self.workflow.name} | Level {self.scrutiny_level}"
 
-    @property
     def user_can_act(self, user) -> bool:
         return self.actors.filter(pk=user.pk).exists()
 
-    @property
     def is_action_allowed(self, action_name: str) -> bool:
         """Check action is configured for this level and is active."""
         return self.allowed_actions.filter(name=action_name, is_active=True).exists()
